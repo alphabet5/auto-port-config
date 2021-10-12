@@ -59,7 +59,7 @@ if __name__ == '__main__':
     
     default-vlan: 1
     scan-frequency: 60 #60 seconds
-    networks:
+    networks: # this section can be left out if you provide environment variables SW_USERNAME and SW_PASSWORD
     # ip/cidr: vlan
       192.168.2.1/24: 2
       192.168.3.1/24: 3
