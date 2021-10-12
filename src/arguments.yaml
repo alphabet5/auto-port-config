@@ -1,0 +1,10 @@
+cfg:
+  help: Location of the configuration file.
+  type: str
+interface:
+  help: Trunk interface for scanning.
+  type: str
+dry-run:
+  help: Do not modify the switch configurations.
+  default: False
+  action: 'store_true'
