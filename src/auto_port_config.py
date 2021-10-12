@@ -119,7 +119,12 @@ if __name__ == '__main__':
             print(datetime.now(), "Fetching up to date information from the switches.")
             sw_data = dict()
             for sw in cfg['switches']:
-                sw_data[sw] = get_mac_table(sw, cfg['sw-defaults']['user'], cfg['sw-defaults']['pass'])
+                try:
+                    sw_data[sw] = get_mac_table(sw, cfg['sw-defaults']['user'], cfg['sw-defaults']['pass'])
+                except:
+                    # ignore failures when collecting information.
+                    # add better exception handling in the future.
+                    pass
 
             interfaces_to_modify = list()
             for ip, mac in ips.items():
