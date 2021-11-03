@@ -8,3 +8,7 @@ dry-run:
   help: Do not modify the switch configurations.
   default: False
   action: 'store_true'
+cfg-only:
+  help: Only scan the 'configuration'/'default' vlan. (Much faster.)
+  default: False
+  action: 'store_true'

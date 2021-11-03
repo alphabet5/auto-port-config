@@ -47,6 +47,23 @@ def find_interface(mac, sw_data):
     return None
 
 
+def arp_scan(net, vlan, interface):
+    print("Scanning " + net + ' on vlan ' + str(vlan) + ' using interface ' + interface)
+    ips = dict()
+    scn = subprocess.run(
+        ['sudo', 'arp-scan', '--interface=' + interface, '--vlan=' + str(vlan), net],
+        capture_output=True)
+    results = scn.stdout.decode('utf-8')
+    scn_ips = re.findall(r'(\d+\.\d+\.\d+\.\d+)\t(([0-9a-f]{2}:){5}[0-9a-f]{2})(\t.*?)(VLAN=(\d+))', results)
+    for ip in scn_ips:
+        # Sometimes arp-scan sends an arp request via an interface
+        # instead of an arp probe on the specified vlan. This
+        # filters entries on the wrong vlan out of the results.
+        if int(ip[5]) == vlan:
+            ips[ip[0]] = ip[1].upper().replace(':', '')
+    return ips
+
+
 if __name__ == '__main__':
     # Install rich traceback for better diagnostics.
     install(show_locals=True)
@@ -59,11 +76,11 @@ if __name__ == '__main__':
     
     default-vlan: 1
     scan-frequency: 60 #60 seconds
-    networks: # this section can be left out if you provide environment variables SW_USERNAME and SW_PASSWORD
+    networks:
     # ip/cidr: vlan
       192.168.2.1/24: 2
       192.168.3.1/24: 3
-    sw-defaults:
+    sw-defaults: # this section can be left out if you provide environment variables SW_USERNAME and SW_PASSWORD
       user: username
       pass: password
     switches:
@@ -98,19 +115,16 @@ if __name__ == '__main__':
     while True:
         # Scan networks
         ips = dict()
-        vlans = list(cfg['networks'].values())
-        vlans.append(cfg['default-vlan'])
         for net in cfg['networks'].keys():
-            for vlan in vlans:
-                if cfg['networks'][net] != vlan:
-                    print(datetime.now(), 'Scanning ' + net + ' on vlan ' + str(vlan) + '.')
-                    scn = subprocess.run(
-                        ['sudo', 'arp-scan', '--interface=' + args['interface'], '--vlan=' + str(vlan), net],
-                        capture_output=True)
-                    results = scn.stdout.decode('utf-8')
-                    scn_ips = re.findall(r'(\d+\.\d+\.\d+\.\d+)\t(([0-9a-f]{2}:){5}[0-9a-f]{2})(\t.*)', results)
-                    for ip in scn_ips:
-                        ips[ip[0]] = ip[1].upper().replace(':', '')
+            if args['cfg_only']:
+                vlan = cfg['default-vlan']
+                ips = ips | arp_scan(net, cfg['default-vlan'], args['interface'])
+            else:
+                vlans = list(cfg['networks'].values())
+                vlans.append(cfg['default-vlan'])
+                for vlan in vlans:
+                    if cfg['networks'][net] != vlan:
+                        ips = ips | arp_scan(net, vlan, args['interface'])
         # Check to make sure there are some IP's on incorrect vlans, then scan switches.
         if len(ips) > 0:
             print(datetime.now(), "Found IP Addresses: ")
@@ -136,19 +150,23 @@ if __name__ == '__main__':
                 if add_int is not None:
                     interfaces_to_modify.append(add_int)
             print(interfaces_to_modify)
-            # Update the port configuration
+            # Combine the interfaces that are on the same switch to improve performance
+            updated_configs = defaultdict(lambda: {})
             for data in interfaces_to_modify:
-                print(datetime.now(), 'Updating ' + data['sw'] + ' ' + data['interface'] + ' to vlan ' + str(data['vlan']))
-                sw = data['sw']
-                interface = data['interface']
-                vlan = data['vlan']
+                updated_configs[data['sw']][data['interface']] = data['vlan']
+            # Update the port configuration
+            for sw, interfaces in updated_configs.items():
+                print(datetime.now(), 'Updating ' + sw + ':\n', interfaces)
                 driver = get_network_driver('ios')
                 device = driver(sw, cfg['sw-defaults']['user'], cfg['sw-defaults']['pass'],
                                 optional_args={'global_delay_factor': 2, 'transport': 'ssh'})
                 device.open()
-                config = 'interface ' + interface + '\n' + \
-                         'switchport access vlan ' + str(vlan) + '\n' + \
-                         'spanning-tree portfast \nspanning-tree bpduguard enable'
+                config = ""
+                for interface, vlan in interfaces.items():
+                    config += 'interface ' + interface + '\n' + \
+                              'switchport mode access\n' + \
+                              'switchport access vlan ' + str(vlan) + '\n' + \
+                              'spanning-tree portfast \nspanning-tree bpduguard enable\n'
                 if not args['dry_run']:
                     device.load_merge_candidate(config=config)
                     print(device.compare_config())

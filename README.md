@@ -12,12 +12,13 @@
 
 ## Usage
 
-```bash
+```text
 python3.9 ./src/auto_port_config.py --help
-usage: auto_port_config.py [-h] [--cfg CFG] [--interface INTERFACE] [--dry-run]
+usage: auto_port_config.py [-h] [--cfg CFG] [--interface INTERFACE] [--dry-run] [--cfg-only]
 
 This script is used to provision ports from a default vlan to the correct vlan. 
 The input should be a configuration file in the following format.
+
 default-vlan: 1
 scan-frequency: 60 #60 seconds
 networks:
@@ -43,9 +44,22 @@ optional arguments:
   --interface INTERFACE
                         Trunk interface for scanning.
   --dry-run             Do not modify the switch configurations.
+  --cfg-only            Only scan the 'configuration'/'default' vlan. (Much faster.)
 
 ```
 
+## Building
+
+```bash
+sudo rm -r dist
+python3.9 -m poetry build
+```
+
 ## Changelog
+
+### 0.1.0 Updates for efficiency and bug fixes
+- Apply the config changes for all interfaces on a switch at the same time. (significant speed-up when many interfaces come online at one time.)
+- Add filtering to arp-scan results, to remove entries that are returned on an incorrect vlan.
+- Add an option to only scan the configuration/default vlan. Without this/by default it scans for devices on incorrect vlans.
 
 ### 0.0.0 Initial Commit
