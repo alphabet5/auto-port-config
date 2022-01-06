@@ -2,3 +2,4 @@
 .idea/*
 cfg.yaml
 dist/*
+.DS_Store
